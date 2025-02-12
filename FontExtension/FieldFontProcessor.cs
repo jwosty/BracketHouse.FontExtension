@@ -40,7 +40,7 @@ namespace BracketHouse.FontExtension
 			
 			if (File.Exists(msdfgen))
 			{
-				var (atlasBitmap, atlasJSON) = CreateAtlas(inputDir, input, msdfgen, objPath);
+				var (atlasBitmap, atlasJSON) = CreateAtlas(inputDir, input, msdfgen, objPath, context.Logger.LogMessage, LogWarning);
 				var bytes = File.ReadAllBytes(atlasBitmap);
 				return FieldFont.FromJsonAndBitmapBytes(atlasJSON, bytes);
 			}
@@ -48,6 +48,9 @@ namespace BracketHouse.FontExtension
 			throw new FileNotFoundException(
 				"Could not find msdf-atlas-gen. Check your content processor parameters",
 				msdfgen);
+
+			void LogWarning(string message, object[] args) => 
+				context.Logger.LogWarning("", context.SourceIdentity, message, args);
 		}
 
 		/// <summary>
@@ -57,8 +60,10 @@ namespace BracketHouse.FontExtension
 		/// <param name="font">Filename for the font</param>
 		/// <param name="msdfgen">Path for the msdf-atlas-gen executable</param>
 		/// <param name="objPath">Path for the folder to store the output in</param>
+		/// <param name="logMessage">A callback for logging messages</param>
+		/// <param name="logWarning">A callback for logging warnings</param>
 		/// <returns>Tuple of paths to atlas bitmap and atlas json</returns>
-		private (string atlasBitmap, string atlasJSON) CreateAtlas(string srcFileDir, FontDescription font, string msdfgen, string objPath)
+		private (string atlasBitmap, string atlasJSON) CreateAtlas(string srcFileDir, FontDescription font, string msdfgen, string objPath, Action<string, string[]> logMessage, Action<string, object[]> logWarning)
 		{
 			string procName = Path.GetFileName(msdfgen);
 			
@@ -74,7 +79,7 @@ namespace BracketHouse.FontExtension
 			
 			string arguments =
 				$"-font \"{fullFontPath}\" -imageout \"{outputPath}\" -type mtsdf -charset \"{charsetPath}\" -size {this.Resolution} -pxrange {this.Range} -json \"{jsonPath}\" -yorigin top";
-			Console.WriteLine($"> {msdfgen} {arguments}");
+			logMessage("> {0} {1}", [msdfgen, arguments]);
 			
 			var startInfo = new ProcessStartInfo(msdfgen)
 			{
@@ -90,11 +95,12 @@ namespace BracketHouse.FontExtension
 			}
 			process.OutputDataReceived += (s, e) =>
 			{
-				Console.WriteLine("{0}> {1}", procName, e.Data);
+				logMessage("{0}> {1}", [procName, e.Data]);
+				
 			};
 			process.ErrorDataReceived += (s, e) =>
 			{
-				Console.Error.WriteLine("{0}> {1}", procName, e.Data);
+				logWarning("{0}> {1}", [procName, e.Data]);
 			};
 			process.BeginOutputReadLine();
 			process.BeginErrorReadLine();
