@@ -34,11 +34,13 @@ namespace BracketHouse.FontExtension
 		public override FieldFont Process(FontDescription input, ContentProcessorContext context)
 		{
 			var msdfgen = Path.Combine(Directory.GetCurrentDirectory(), this.ExternalPath);
-			var objPath = Path.Combine(Directory.GetCurrentDirectory(), "obj");
-
+			
+			var inputDir = Path.GetDirectoryName(context.SourceIdentity.SourceFilename) ?? string.Empty;
+			var objPath = context.IntermediateDirectory;
+			
 			if (File.Exists(msdfgen))
 			{
-				var (atlasBitmap, atlasJSON) = CreateAtlas(input, msdfgen, objPath);
+				var (atlasBitmap, atlasJSON) = CreateAtlas(inputDir, input, msdfgen, objPath);
 				var bytes = File.ReadAllBytes(atlasBitmap);
 				return FieldFont.FromJsonAndBitmapBytes(atlasJSON, bytes);
 			}
@@ -47,15 +49,20 @@ namespace BracketHouse.FontExtension
 				"Could not find msdf-atlas-gen. Check your content processor parameters",
 				msdfgen);
 		}
+
 		/// <summary>
 		/// Run msdf-atlas-gen on our font
 		/// </summary>
+		/// <param name="srcFileDir">Directory in which the font description file is located</param>
 		/// <param name="font">Filename for the font</param>
 		/// <param name="msdfgen">Path for the msdf-atlas-gen executable</param>
 		/// <param name="objPath">Path for the folder to store the output in</param>
 		/// <returns>Tuple of paths to atlas bitmap and atlas json</returns>
-		private (string atlasBitmap, string atlasJSON) CreateAtlas(FontDescription font, string msdfgen, string objPath)
+		private (string atlasBitmap, string atlasJSON) CreateAtlas(string srcFileDir, FontDescription font, string msdfgen, string objPath)
 		{
+			string procName = Path.GetFileName(msdfgen);
+			
+			var fullFontPath = Path.Combine(srcFileDir, font.Path);
 			var name = Path.GetFileNameWithoutExtension(font.Path);
 			var outputPath = Path.Combine(objPath, $"{name}-atlas.png");
 			var charsetPath = Path.Combine(objPath, $"{name}-charset.txt");
@@ -64,19 +71,38 @@ namespace BracketHouse.FontExtension
 			charset = charset.Replace("\\", "\\\\");
 			charset = charset.Replace("\"", "\\\"");
 			File.WriteAllText(charsetPath, $"\"{charset}\"");
-
+			
+			string arguments =
+				$"-font \"{fullFontPath}\" -imageout \"{outputPath}\" -type mtsdf -charset \"{charsetPath}\" -size {this.Resolution} -pxrange {this.Range} -json \"{jsonPath}\" -yorigin top";
+			Console.WriteLine($"> {msdfgen} {arguments}");
+			
 			var startInfo = new ProcessStartInfo(msdfgen)
 			{
 				UseShellExecute = false,
 				RedirectStandardOutput = true,
-				Arguments = $"-font \"{font.Path}\" -imageout \"{outputPath}\" -type mtsdf -charset \"{charsetPath}\" -size {this.Resolution} -pxrange {this.Range} -json \"{jsonPath}\" -yorigin top"
+				RedirectStandardError = true,
+				Arguments = arguments
 			};
 			var process = System.Diagnostics.Process.Start(startInfo);
 			if (process == null)
 			{
-				throw new InvalidOperationException("Could not start msdf-atlas-gen.exe");
+				throw new InvalidOperationException($"Could not start {procName}");
 			}
+			process.OutputDataReceived += (s, e) =>
+			{
+				Console.WriteLine("{0}> {1}", procName, e.Data);
+			};
+			process.ErrorDataReceived += (s, e) =>
+			{
+				Console.Error.WriteLine("{0}> {1}", procName, e.Data);
+			};
+			process.BeginOutputReadLine();
+			process.BeginErrorReadLine();
 			process.WaitForExit();
+			if (process.ExitCode != 0)
+			{
+				throw new IOException($"{procName} exited with non-zero exit code ({process.ExitCode})");
+			}
 			return (outputPath, jsonPath);
 		}
 	}
