@@ -85,10 +85,11 @@ namespace BracketHouse.FontExtension
 					break;
 			}
 			shaderName = $"BracketHouse.FontExtension.{shaderName}";
-			string tempName = $"{Path.GetTempFileName()}";
+			//string tempName = $"{Path.GetTempFileName()}";
+			string tempName = Path.Combine($"{shaderName}.{Guid.NewGuid().ToString().ToLowerInvariant()}");
 			using (Stream shader = Assembly.GetExecutingAssembly().GetManifestResourceStream($"{shaderName}.xnb"))
 			{
-				using (FileStream target = File.Create($"{tempName}.xnb"))
+				using (FileStream target = File.Create(Path.Combine(content.RootDirectory, $"{tempName}.xnb")))
 				{
 					target.Seek(0, SeekOrigin.Begin);
 					shader.CopyTo(target);
