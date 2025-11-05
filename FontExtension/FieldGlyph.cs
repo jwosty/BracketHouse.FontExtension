@@ -3,7 +3,7 @@ using Microsoft.Xna.Framework.Content;
 
 namespace BracketHouse.FontExtension
 {
-	internal class FieldGlyph
+	public class FieldGlyph
 	{
 		[ContentSerializer] private readonly char CharacterBackend;
 		[ContentSerializer] private readonly float AdvanceBackend;
