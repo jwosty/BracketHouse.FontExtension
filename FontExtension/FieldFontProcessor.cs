@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Xna.Framework;
@@ -29,16 +30,23 @@ namespace BracketHouse.FontExtension
 		[Description("Distance field range, in pixels in the output texture")]
 		[DefaultValue(4)]
 		public virtual uint Range { get; set; } = 4;
-
-
+		
+		private string RemoveExtension(string path) => path.Substring(0, path.Length - Path.GetExtension(path).Length);
+		
 		public override FieldFont Process(FontDescription input, ContentProcessorContext context)
 		{
-			var msdfgen = Path.Combine(Directory.GetCurrentDirectory(), this.ExternalPath);
+			var msdfgen =
+				// Try finding ExternalPath modified with various combinations of extensions or lack thereof, so that it
+				// doesn't matter whether you say msdf-atlas-gen.exe or msdf-atlas-gen
+				(new[] { this.ExternalPath, RemoveExtension(this.ExternalPath), Path.ChangeExtension(this.ExternalPath, "exe") })
+				.Distinct()
+				.Select(path => Path.Combine(Directory.GetCurrentDirectory(), path))
+				.FirstOrDefault(File.Exists);
 			
 			var inputDir = Path.GetDirectoryName(context.SourceIdentity.SourceFilename) ?? string.Empty;
 			var objPath = context.IntermediateDirectory;
 			
-			if (File.Exists(msdfgen))
+			if (msdfgen is not null)
 			{
 				var (atlasBitmap, atlasJSON) = CreateAtlas(inputDir, input, msdfgen, objPath, context.Logger.LogMessage, LogWarning);
 				var bytes = File.ReadAllBytes(atlasBitmap);
