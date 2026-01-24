@@ -35,18 +35,20 @@ namespace BracketHouse.FontExtension
 		
 		public override FieldFont Process(FontDescription input, ContentProcessorContext context)
 		{
-			var msdfgen =
-				// Try finding ExternalPath modified with various combinations of extensions or lack thereof, so that it
-				// doesn't matter whether you say msdf-atlas-gen.exe or msdf-atlas-gen
-				(new[] { this.ExternalPath, RemoveExtension(this.ExternalPath), Path.ChangeExtension(this.ExternalPath, "exe") })
-				.Distinct()
-				.Select(path => Path.Combine(Directory.GetCurrentDirectory(), path))
-				.FirstOrDefault(File.Exists);
+			// Remove other platform's extension or add this platform's extension when necessary, so that it doesn't
+			// doesn't matter whether you say msdf-atlas-gen.exe or msdf-atlas-gen, and also running the wrong platform's
+			// executable is never attempted
+			var msdfgen = (OperatingSystem.IsWindows(), Path.GetExtension(this.ExternalPath) == ".exe") switch
+			{
+				(true, false) => Path.ChangeExtension(this.ExternalPath, ".exe"),
+				(false, true) => this.RemoveExtension(this.ExternalPath),
+				_ => this.ExternalPath
+			};
 			
 			var inputDir = Path.GetDirectoryName(context.SourceIdentity.SourceFilename) ?? string.Empty;
 			var objPath = context.IntermediateDirectory;
 			
-			if (msdfgen is not null)
+			if (File.Exists(msdfgen))
 			{
 				var (atlasBitmap, atlasJSON) = CreateAtlas(inputDir, input, msdfgen, objPath, context.Logger.LogMessage, LogWarning);
 				var bytes = File.ReadAllBytes(atlasBitmap);
